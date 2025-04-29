@@ -25,6 +25,26 @@ interface Expense {
   date: string;
   vendor: { name: string };
   title: string;
+  products: Product[];
+  notes: Note[];
+
+}
+
+interface Note {
+  text: string;
+  author: string;
+  date: string;
+  image: string;
+}
+
+interface Product {
+  name: string;
+  description: string;
+  category: string;
+  qty: number;
+  unit: string;
+  price: number;
+  amount: number;
 }
 
 interface ExpenseResponse {
@@ -97,6 +117,20 @@ export function ExpenseTable() {
     expense.vendor?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     expense.status.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // filtered.forEach((expense, index) => {
+  //   console.log(`Expense ${index + 1}: ${expense.title}`);
+  //   console.log(`Products:`);
+    
+  //   if (expense.products && expense.products.length > 0) {
+  //     expense.products.forEach((product, productIndex) => {
+  //       console.log(`  Product ${productIndex + 1}:`, product);
+  //     });
+  //   } else {
+  //     console.log("  No products listed.");
+  //   }
+  //   console.log('----------------------');
+  // });
 
   const handleExpensePress = (expense: Expense) => {
     navigation.navigate('[id]', { id: expense._id });
