@@ -11,16 +11,9 @@ export default function ExpensesLayout() {
       <Stack.Screen
         name="index"
         options={{
-          headerShown: true,
-          title: 'Expenses',
-          headerRight: () => (
-            <TouchableOpacity
-              onPress={() => router.push('/expenses/create')}
-              className="mr-4"
-            >
-              <Ionicons name="add" size={24} color="#007AFF" />
-            </TouchableOpacity>
-          ),
+          headerShown: false,
+          title: '', 
+          
         }}
       />
       <Stack.Screen

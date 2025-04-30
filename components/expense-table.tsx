@@ -1,15 +1,23 @@
-import { View, FlatList, ActivityIndicator } from 'react-native';
-import { TouchableOpacity, RefreshControl } from 'react-native';
-
+import {
+  View,
+  FlatList,
+  ActivityIndicator,
+  TouchableOpacity,
+  RefreshControl,
+  Animated,
+  Easing,
+} from 'react-native';
 import { Input } from '~/components/ui/input';
 import { Text } from '~/components/ui/text';
 import { useFetch } from '~/hook/useFetch';
 import { useState, useCallback, useEffect } from 'react';
 import { ExpenseTotals } from './expense-totals';
 import { getApiUrl } from '~/utils/config';
-import {Skeleton } from '~/components/ui/skeleton'; // assume you created one
+import { Skeleton } from '~/components/ui/skeleton';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
 type RootStackParamList = {
   '[id]': { id: string };
@@ -27,7 +35,6 @@ interface Expense {
   title: string;
   products: Product[];
   notes: Note[];
-
 }
 
 interface Note {
@@ -69,6 +76,8 @@ export function ExpenseTable() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchAnim] = useState(new Animated.Value(0));
 
   const { data: totalsData, fetch: fetchTotals } = useFetch<TotalsResponse>(getApiUrl());
   const { data, loading, error, fetch } = useFetch<ExpenseResponse>(getApiUrl());
@@ -77,7 +86,7 @@ export function ExpenseTable() {
     try {
       const [totals, list] = await Promise.all([
         fetchTotals('/expense/totals'),
-        fetch(`/expense/list?page=1&pagesize=${pageSize}`)
+        fetch(`/expense/list?page=1&pagesize=${pageSize}`),
       ]);
       setExpenses(list?.expenses || []);
       setHasMore(list?.expenses.length === pageSize || false);
@@ -97,7 +106,7 @@ export function ExpenseTable() {
     try {
       const more = await fetch(`/expense/list?page=${page}&pagesize=${pageSize}`);
       if (more?.expenses && more.expenses.length < pageSize) setHasMore(false);
-      setExpenses(prev => [...prev, ...more?.expenses || []]);
+      setExpenses(prev => [...prev, ...(more?.expenses || [])]);
       setPage(prev => prev + 1);
     } catch (err) {
       console.error('Load more error:', err);
@@ -118,23 +127,32 @@ export function ExpenseTable() {
     expense.status.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // filtered.forEach((expense, index) => {
-  //   console.log(`Expense ${index + 1}: ${expense.title}`);
-  //   console.log(`Products:`);
-    
-  //   if (expense.products && expense.products.length > 0) {
-  //     expense.products.forEach((product, productIndex) => {
-  //       console.log(`  Product ${productIndex + 1}:`, product);
-  //     });
-  //   } else {
-  //     console.log("  No products listed.");
-  //   }
-  //   console.log('----------------------');
-  // });
-
   const handleExpensePress = (expense: Expense) => {
     navigation.navigate('[id]', { id: expense._id });
   };
+
+  const toggleSearch = () => {
+    if (!showSearch) {
+      Animated.timing(searchAnim, {
+        toValue: 1,
+        duration: 300,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: false,
+      }).start(() => setShowSearch(true));
+    } else {
+      Animated.timing(searchAnim, {
+        toValue: 0,
+        duration: 300,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: false,
+      }).start(() => setShowSearch(false));
+    }
+  };
+
+  const animatedWidth = searchAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '80%'],
+  });
 
   const renderItem = ({ item }: { item: Expense }) => (
     <TouchableOpacity
@@ -155,14 +173,21 @@ export function ExpenseTable() {
         </Text>
       </View>
       <View className="mt-2">
-        <Text className={`text-sm ${
-          item.status === 'APPROVED' ? 'text-green-500' :
-          item.status === 'PENDING' ? 'text-yellow-500' :
-          item.status === 'PAID' ? 'text-purple-500' :
-          item.status === 'REVIEWED' ? 'text-blue-500' :
-          item.status === 'VALIDATED' ? 'text-indigo-500' :
-          'text-muted-foreground'
-        }`}>
+        <Text
+          className={`text-sm ${
+            item.status === 'APPROVED'
+              ? 'text-green-500'
+              : item.status === 'PENDING'
+              ? 'text-yellow-500'
+              : item.status === 'PAID'
+              ? 'text-purple-500'
+              : item.status === 'REVIEWED'
+              ? 'text-blue-500'
+              : item.status === 'VALIDATED'
+              ? 'text-indigo-500'
+              : 'text-muted-foreground'
+          }`}
+        >
           {item.status}
         </Text>
       </View>
@@ -171,15 +196,38 @@ export function ExpenseTable() {
 
   return (
     <View className="flex-1 bg-background">
-      <ExpenseTotals totals={totalsData || {
-        total: 0, pending: 0, approved: 0, paid: 0, draft: 0, validated: 0
-      }} />
+      
 
-      <Input
-        placeholder="Search expenses..."
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        className="mb-4 bg-background"
+      <View className="flex-row justify-between items-center px-4 mb-4 space-x-2">
+        <Animated.View style={{ width: animatedWidth, overflow: 'hidden' }}>
+          <Input
+            placeholder="Search expenses..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            className="bg-background"
+          />
+        </Animated.View>
+
+        <View className="flex-row space-x-3 items-center">
+          <TouchableOpacity onPress={toggleSearch}>
+            <Ionicons name="search" size={28} color="#007AFF" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/expenses/create')}>
+            <Ionicons name="add-circle-outline" size={32} color="#007AFF" />
+          </TouchableOpacity>
+        </View>
+      </View>
+      <ExpenseTotals
+        totals={
+          totalsData || {
+            total: 0,
+            pending: 0,
+            approved: 0,
+            paid: 0,
+            draft: 0,
+            validated: 0,
+          }
+        }
       />
 
       {loading && expenses.length === 0 ? (
@@ -197,9 +245,7 @@ export function ExpenseTable() {
           keyExtractor={item => item._id}
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListFooterComponent={
             isLoadingMore ? <ActivityIndicator className="mt-4" size="small" /> : null
           }
