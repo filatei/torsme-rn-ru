@@ -11,7 +11,9 @@ interface SignupResponse {
   message: string;
   result: {
     verify: string;
+    otp: string;
   };
+  otp: string;
 }
 
 export function SignupForm() {
@@ -51,10 +53,11 @@ export function SignupForm() {
         body: JSON.stringify({ name, email, password, phone }),
       }) as SignupResponse;
 
+      console.log(response, 'response');
       if (response.message === 'User created!') {
         router.replace({
           pathname: '/(auth)/verify',
-          params: { email, token: response.result.verify }
+          params: { email, token: response.result.verify,otpfromserver: response.otp }
         });
       }
     } catch (err) {

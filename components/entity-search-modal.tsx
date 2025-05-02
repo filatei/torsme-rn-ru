@@ -9,45 +9,57 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import React from 'react';
 
-interface Product {
+interface Entity {
   _id: string;
   id?: string;
   name: string;
   description?: string;
-  unit?: string;
-  category?: string;
   icon?: string;
+  [key: string]: any; // Allow additional fields
 }
 
-interface ProductSearchModalProps {
+interface EntitySearchModalProps {
   visible: boolean;
   onClose: () => void;
-  onSelect: (product: Product) => void;
+  onSelect: (entity: Entity) => void;
+  entityType: 'product' | 'vendor';
+  searchEndpoint: string;
+  createEndpoint: string;
+  updateEndpoint: string;
+  requiredFields: string[];
+  additionalFields?: string[];
 }
 
-export function ProductSearchModal({ visible, onClose, onSelect }: ProductSearchModalProps) {
+export function EntitySearchModal({ 
+  visible, 
+  onClose, 
+  onSelect, 
+  entityType,
+  searchEndpoint,
+  createEndpoint,
+  updateEndpoint,
+  requiredFields,
+  additionalFields = []
+}: EntitySearchModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isEditing, setIsEditing] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<Product | null>(null);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [unit, setUnit] = useState('');
-  const [category, setCategory] = useState('');
+  const [selectedItem, setSelectedItem] = useState<Entity | null>(null);
+  const [formData, setFormData] = useState<Record<string, string>>({});
   const [image, setImage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data, loading, error, fetch } = useFetch<{ stockItems: Product[] }>(getApiUrl());
-  const { fetch: fetchCreate } = useFetch<{ stockitem?: Product } & Product>(getApiUrl());
+  const { data, loading, error, fetch } = useFetch<{ stockItems?: Entity[], contacts?: Entity[] }>(getApiUrl());
+  const { fetch: fetchCreate } = useFetch<{ item?: Entity } & Entity>(getApiUrl());
 
-  const searchProducts = async () => {
+  const searchEntities = async () => {
     if (searchQuery.trim().length < 1) return;
-    await fetch(`/stockitem/getByText?searchTerm=${encodeURIComponent(searchQuery)}`);
+    await fetch(`${searchEndpoint}?searchTerm=${encodeURIComponent(searchQuery)}`);
   };
 
   useEffect(() => {
     if (visible && searchQuery.length > 0) {
       const debounce = setTimeout(() => {
-        searchProducts();
+        searchEntities();
       }, 300);
       return () => clearTimeout(debounce);
     }
@@ -67,21 +79,27 @@ export function ProductSearchModal({ visible, onClose, onSelect }: ProductSearch
   };
 
   const handleSubmit = async () => {
-    if (!name.trim()) return;
+    // Validate required fields
+    const missingFields = requiredFields.filter(field => !formData[field]?.trim());
+    if (missingFields.length > 0) {
+      Alert.alert(
+        'Missing Fields',
+        `Please fill in: ${missingFields.join(', ')}`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
 
     setIsSubmitting(true);
     try {
-      const formData = new FormData();
-      formData.append('name', name.trim());
-      if (description) formData.append('description', description.trim());
-      if (unit) formData.append('unit', unit.trim());
-      if (category) formData.append('category', category.trim());
+      const formDataObj = new FormData();
+      Object.entries(formData).forEach(([key, value]) => {
+        if (value) formDataObj.append(key, value.trim());
+      });
 
       if (image && !image.startsWith('http')) {
-        // Use a simpler file name format
-        const fileName = `stockitem_${Date.now()}.jpg`;
-        
-        formData.append('image', {
+        const fileName = `${entityType}_${Date.now()}.jpg`;
+        formDataObj.append('icon', {
           uri: image,
           type: 'image/jpeg',
           name: fileName,
@@ -89,37 +107,27 @@ export function ProductSearchModal({ visible, onClose, onSelect }: ProductSearch
       }
 
       const endpoint = selectedItem?._id 
-        ? `/stockitem/${selectedItem._id}`
-        : '/stockitem';
+        ? `${updateEndpoint}/${selectedItem._id}`
+        : createEndpoint;
 
       const response = await fetchCreate(endpoint, {
         method: selectedItem?._id ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        body: formData,
+        body: formDataObj,
       });
 
       if (response) {
-        // For POST, the response is in response.stockitem
-        // For PUT, the response is the stockitem directly
-        const stockItem = response.stockitem || response;
-        onSelect({
-          _id: stockItem._id || stockItem.id || '',
-          name: stockItem.name,
-          description: stockItem.description,
-          unit: stockItem.unit,
-          category: stockItem.category,
-          icon: stockItem.icon,
-        });
+        const entity = response.item || response;
+        onSelect(entity);
         onClose();
       }
     } catch (error) {
-      console.error('Failed to save stock item:', error);
-      // Show error message to user
+      console.error(`Failed to save ${entityType}:`, error);
       Alert.alert(
         'Error',
-        'Failed to save stock item. Please try again.',
+        `Failed to save ${entityType}. Please try again.`,
         [{ text: 'OK' }]
       );
     } finally {
@@ -127,30 +135,53 @@ export function ProductSearchModal({ visible, onClose, onSelect }: ProductSearch
     }
   };
 
-  const startEditing = (item: Product) => {
+  const startEditing = (item: Entity) => {
     setSelectedItem(item);
-    setName(item.name);
-    setDescription(item.description || '');
-    setUnit(item.unit || '');
-    setCategory(item.category || '');
+    const initialData: Record<string, string> = {};
+    [...requiredFields, ...additionalFields].forEach(field => {
+      initialData[field] = item[field] || '';
+    });
+    setFormData(initialData);
     setImage(item.icon || null);
     setIsEditing(true);
   };
 
   const startCreating = () => {
     setSelectedItem(null);
-    setName(searchQuery);
-    setDescription('');
-    setUnit('');
-    setCategory('');
+    const initialData: Record<string, string> = {};
+    [...requiredFields, ...additionalFields].forEach(field => {
+      initialData[field] = field === 'name' ? searchQuery : '';
+    });
+    setFormData(initialData);
     setImage(null);
     setIsEditing(true);
   };
 
-  const renderItem = ({ item }: { item: Product }) => (
+  const getEntityData = () => {
+    if (!data) return [];
+    return entityType === 'product' ? data.stockItems || [] : data.contacts || [];
+  };
+
+  const renderItem = ({ item }: { item: Entity }) => (
     <View className="flex-row items-center bg-card rounded-lg mb-2 p-4">
       <View className="flex-1">
         <Text className="font-medium text-foreground">{item.name}</Text>
+        {item.description && item.description !== 'null' && (
+          <Text className="text-sm text-muted-foreground">{item.description}</Text>
+        )}
+        {entityType === 'product' && item.unit && item.unit !== 'undefined' && (
+          <Text className="text-sm text-muted-foreground">Unit: {item.unit}</Text>
+        )}
+        {entityType === 'vendor' && (
+          <>
+            {item.phone && item.phone !== 'null' && (
+              <Text className="text-sm text-muted-foreground">Phone: {item.phone}</Text>
+            )}
+            {item.email && item.email !== 'null' && (
+              <Text className="text-sm text-muted-foreground">Email: {item.email}</Text>
+            )}
+          </>
+        )}
       </View>
       <View className="flex-row space-x-2">
         <Button
@@ -201,12 +232,12 @@ export function ProductSearchModal({ visible, onClose, onSelect }: ProductSearch
             {!isEditing && (
               <View className="flex-1 bg-muted rounded-full">
                 <Input
-                  placeholder="Search products..."
+                  placeholder={`Search ${entityType}s...`}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   autoFocus
                   returnKeyType="search"
-                  onSubmitEditing={searchProducts}
+                  onSubmitEditing={searchEntities}
                   className="px-4 py-2"
                 />
               </View>
@@ -230,48 +261,26 @@ export function ProductSearchModal({ visible, onClose, onSelect }: ProductSearch
                   )}
                 </TouchableOpacity>
 
-                <View>
-                  <Text className="text-sm text-muted-foreground mb-1">Name *</Text>
-                  <Input
-                    value={name}
-                    onChangeText={setName}
-                    placeholder="Enter item name"
-                  />
-                </View>
-
-                <View>
-                  <Text className="text-sm text-muted-foreground mb-1">Description</Text>
-                  <Input
-                    value={description}
-                    onChangeText={setDescription}
-                    placeholder="Enter description"
-                    multiline
-                    numberOfLines={3}
-                    className="min-h-[80px] py-2"
-                  />
-                </View>
-
-                <View>
-                  <Text className="text-sm text-muted-foreground mb-1">Unit</Text>
-                  <Input
-                    value={unit}
-                    onChangeText={setUnit}
-                    placeholder="Enter unit (e.g., PCS, KG)"
-                  />
-                </View>
-
-                <View>
-                  <Text className="text-sm text-muted-foreground mb-1">Category</Text>
-                  <Input
-                    value={category}
-                    onChangeText={setCategory}
-                    placeholder="Enter category"
-                  />
-                </View>
+                {[...requiredFields, ...additionalFields].map(field => (
+                  <View key={field}>
+                    <Text className="text-sm text-muted-foreground mb-1">
+                      {field.charAt(0).toUpperCase() + field.slice(1)}
+                      {requiredFields.includes(field) ? ' *' : ''}
+                    </Text>
+                    <Input
+                      value={formData[field] || ''}
+                      onChangeText={(value) => setFormData(prev => ({ ...prev, [field]: value }))}
+                      placeholder={`Enter ${field}`}
+                      multiline={field === 'description'}
+                      numberOfLines={field === 'description' ? 3 : 1}
+                      className={field === 'description' ? 'min-h-[80px] py-2' : ''}
+                    />
+                  </View>
+                ))}
 
                 <Button
                   onPress={handleSubmit}
-                  disabled={isSubmitting || !name.trim()}
+                  disabled={isSubmitting || requiredFields.some(field => !formData[field]?.trim())}
                   className="w-full mt-4"
                 >
                   {isSubmitting ? (
@@ -294,21 +303,21 @@ export function ProductSearchModal({ visible, onClose, onSelect }: ProductSearch
                 </View>
               ) : (
                 <FlatList
-                  data={data?.stockItems || []}
+                  data={getEntityData()}
                   renderItem={renderItem}
                   keyExtractor={item => item._id}
                   contentContainerStyle={{ padding: 16 }}
                   ListEmptyComponent={
                     <View className="p-4 items-center">
                       <Text className="text-muted-foreground mb-4">
-                        {searchQuery ? 'No products found' : 'Type to search products'}
+                        {searchQuery ? `No ${entityType}s found` : `Type to search ${entityType}s`}
                       </Text>
                       {searchQuery && (
                         <Button
                           onPress={startCreating}
                           className="w-full"
                         >
-                          <Text className="text-white">Create New Item</Text>
+                          <Text className="text-white">Create New {entityType.charAt(0).toUpperCase() + entityType.slice(1)}</Text>
                         </Button>
                       )}
                     </View>

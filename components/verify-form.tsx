@@ -9,13 +9,14 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 interface VerifyResponse {
   message: string;
+  otp: string;
 }
 
 export function VerifyForm() {
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
   const { fetch } = useFetch(getApiUrl());
-  const { email, token } = useLocalSearchParams<{ email: string; token: string }>();
+  const { email, token, otpfromserver   } = useLocalSearchParams<{ email: string; token: string; otpfromserver: string;   }>();
 
   const handleVerify = async () => {
     try {
@@ -30,6 +31,7 @@ export function VerifyForm() {
         method: 'POST',
         body: JSON.stringify({ token, otp }),
       }) as VerifyResponse;
+       console.log(response, 'response');
 
       if (response.message === 'Confirmation successful') {
         router.replace('/(auth)/login');
@@ -43,9 +45,16 @@ export function VerifyForm() {
     <View className="flex-1 p-4">
       <Text className="text-2xl font-bold mb-6 text-center">Verify Email</Text>
       
-      <Text className="text-center mb-4">
-        Enter the 4-digit OTP sent to {email}
+      <Text className="text-center mb-4 mt-8">
+        Enter the 4-digit OTP shown below
       </Text>
+      <View className="flex-row justify-center items-center">
+        <Text className="text-center mb-4">
+          OTP: {otpfromserver} 
+        </Text>
+       
+      </View>
+     
 
       {error && (
         <Text className="text-red-500 mb-4 text-center">{error}</Text>

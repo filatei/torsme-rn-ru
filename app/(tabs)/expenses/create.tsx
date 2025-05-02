@@ -2,12 +2,14 @@ import { View, ScrollView, ActivityIndicator } from 'react-native';
 import { Text } from '~/components/ui/text';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { useFetch } from '~/hook/useFetch';
 import { getApiUrl } from '~/utils/config';
-import { ProductSearchModal } from '~/components/product-search-modal';
+import { EntitySearchModal } from '~/components/entity-search-modal';
 import { Card } from '~/components/ui/card';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Picker } from '@react-native-picker/picker';
 
 interface Product {
   _id: string;
@@ -15,6 +17,19 @@ interface Product {
   description?: string;
   unit?: string;
   category?: string;
+}
+
+interface Vendor {
+  _id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: {
+    street?: string;
+    city?: string;
+    state?: string;
+    zipcode?: string;
+  };
 }
 
 interface ExpenseProduct extends Product {
@@ -26,18 +41,65 @@ interface ExpenseProduct extends Product {
 export default function CreateExpense() {
   const router = useRouter();
   const [title, setTitle] = useState('');
-  const [vendor, setVendor] = useState('');
+  const [vendor, setVendor] = useState<Vendor | null>(null);
   const [products, setProducts] = useState<ExpenseProduct[]>([]);
-  const [isSearchModalVisible, setIsSearchModalVisible] = useState(false);
+  const [isProductModalVisible, setIsProductModalVisible] = useState(false);
+  const [isVendorModalVisible, setIsVendorModalVisible] = useState(false);
   const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
   const [qty, setQty] = useState('1');
   const [price, setPrice] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [date, setDate] = useState<Date>(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [sites, setSites] = useState<{ name: string }[]>([]);
+  const [site, setSite] = useState('');
+  const [type, setType] = useState('Daily Imprest');
+  const [category, setCategory] = useState('General');
+  const [expenseAccount, setExpenseAccount] = useState('Operations');
 
   const { fetch } = useFetch(getApiUrl());
 
+  useEffect(() => {
+    // Fetch sites from backend
+    (async () => {
+      try {
+        const res = await fetch('/sites');
+        if (res && res.site) {
+          setSites(res.site.map((s: any) => ({ name: s.name })));
+        }
+      } catch (e) {
+        setSites([]);
+      }
+    })();
+  }, []);
+
   const handleProductSelect = (product: Product) => {
     setCurrentProduct(product);
+  };
+
+  const handleVendorSelect = (selectedVendor: Vendor) => {
+    setVendor(selectedVendor);
+  };
+
+  const handleQtyChange = (value: string) => {
+    // Remove any non-numeric characters
+    const numericValue = value.replace(/[^0-9]/g, '');
+    setQty(numericValue);
+  };
+
+  const handlePriceChange = (value: string) => {
+    // Allow decimal points for price, but ensure proper numeric format
+    const numericValue = value.replace(/[^0-9.]/g, '');
+    // Ensure only one decimal point
+    const parts = numericValue.split('.');
+    if (parts.length > 2) {
+      return;
+    }
+    // Ensure no more than 2 decimal places
+    if (parts[1] && parts[1].length > 2) {
+      return;
+    }
+    setPrice(numericValue);
   };
 
   const addProductLine = () => {
@@ -68,6 +130,11 @@ export default function CreateExpense() {
     return products.reduce((sum, product) => sum + product.amount, 0);
   };
 
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(false);
+    if (selectedDate) setDate(selectedDate);
+  };
+
   const handleSubmit = async () => {
     if (!title || !vendor || products.length === 0) return;
 
@@ -80,7 +147,7 @@ export default function CreateExpense() {
         },
         body: JSON.stringify({
           title,
-          vendor: { name: vendor },
+          vendor: vendor._id,
           products: products.map(({ _id, name, qty, price, amount }) => ({
             _id,
             name,
@@ -89,6 +156,11 @@ export default function CreateExpense() {
             amount,
           })),
           txn_amount: getTotalAmount(),
+          date: date.toISOString(),
+          site,
+          type,
+          category,
+          expenseAccount,
         }),
       });
 
@@ -117,12 +189,88 @@ export default function CreateExpense() {
         </View>
 
         <View className="mb-4">
+          <Text className="text-muted-foreground mb-2">Date</Text>
+          <Button onPress={() => setShowDatePicker(true)} variant="outline" className="w-full mb-2">
+            <Text>{date.toLocaleDateString()}</Text>
+          </Button>
+          {showDatePicker && (
+            <DateTimePicker
+              value={date}
+              mode="date"
+              display="default"
+              onChange={handleDateChange}
+            />
+          )}
+        </View>
+
+        <View className="mb-4">
+          <Text className="text-muted-foreground mb-2">Site</Text>
+          <View className="border border-input rounded-md bg-background">
+            <Picker
+              selectedValue={site}
+              onValueChange={setSite}
+            >
+              <Picker.Item label="Select Site" value="" />
+              {sites.map((s) => (
+                <Picker.Item key={s.name} label={s.name} value={s.name} />
+              ))}
+            </Picker>
+          </View>
+        </View>
+
+        <View className="mb-4">
+          <Text className="text-muted-foreground mb-2">Type</Text>
+          <View className="border border-input rounded-md bg-background">
+            <Picker
+              selectedValue={type}
+              onValueChange={setType}
+            >
+              <Picker.Item label="Daily Imprest" value="Daily Imprest" />
+              <Picker.Item label="Non Cash" value="Non Cash" />
+            </Picker>
+          </View>
+        </View>
+
+        <View className="mb-4">
+          <Text className="text-muted-foreground mb-2">Category</Text>
+          <View className="border border-input rounded-md bg-background">
+            <Picker
+              selectedValue={category}
+              onValueChange={setCategory}
+            >
+              <Picker.Item label="General" value="General" />
+              <Picker.Item label="Maintenance" value="Maintenance" />
+              <Picker.Item label="Procurement" value="Procurement" />
+              <Picker.Item label="Travel" value="Travel" />
+              <Picker.Item label="Other" value="Other" />
+            </Picker>
+          </View>
+        </View>
+
+        <View className="mb-4">
+          <Text className="text-muted-foreground mb-2">Expense Account</Text>
+          <View className="border border-input rounded-md bg-background">
+            <Picker
+              selectedValue={expenseAccount}
+              onValueChange={setExpenseAccount}
+            >
+              <Picker.Item label="Operations" value="Operations" />
+              <Picker.Item label="Admin" value="Admin" />
+              <Picker.Item label="Finance" value="Finance" />
+              <Picker.Item label="Other" value="Other" />
+            </Picker>
+          </View>
+        </View>
+
+        <View className="mb-4">
           <Text className="text-muted-foreground mb-2">Vendor</Text>
-          <Input
-            value={vendor}
-            onChangeText={setVendor}
-            placeholder="Enter vendor name"
-          />
+          <Button
+            onPress={() => setIsVendorModalVisible(true)}
+            variant="outline"
+            className="w-full"
+          >
+            <Text>{vendor ? vendor.name : 'Select Vendor'}</Text>
+          </Button>
         </View>
 
         <View className="mb-4">
@@ -150,7 +298,7 @@ export default function CreateExpense() {
             <View className="flex-row gap-2 mb-2">
               <View className="flex-1">
                 <Button
-                  onPress={() => setIsSearchModalVisible(true)}
+                  onPress={() => setIsProductModalVisible(true)}
                   variant="outline"
                   className="w-full"
                 >
@@ -159,22 +307,24 @@ export default function CreateExpense() {
               </View>
               <Input
                 value={qty}
-                onChangeText={setQty}
+                onChangeText={handleQtyChange}
                 placeholder="Qty"
                 keyboardType="numeric"
                 className="w-20"
+                maxLength={5}
               />
               <Input
                 value={price}
-                onChangeText={setPrice}
+                onChangeText={handlePriceChange}
                 placeholder="Price"
-                keyboardType="numeric"
+                keyboardType="decimal-pad"
                 className="w-24"
+                maxLength={10}
               />
             </View>
             <Button
               onPress={addProductLine}
-              disabled={!currentProduct || !qty || !price}
+              disabled={!currentProduct || !qty || !price || isNaN(Number(qty)) || isNaN(Number(price))}
               className="w-full"
             >
               <Text className="text-white">Add Product</Text>
@@ -202,10 +352,28 @@ export default function CreateExpense() {
         </Button>
       </Card>
 
-      <ProductSearchModal
-        visible={isSearchModalVisible}
-        onClose={() => setIsSearchModalVisible(false)}
+      <EntitySearchModal
+        visible={isProductModalVisible}
+        onClose={() => setIsProductModalVisible(false)}
         onSelect={handleProductSelect}
+        entityType="product"
+        searchEndpoint="/stockitem/getByText"
+        createEndpoint="/stockitem"
+        updateEndpoint="/stockitem"
+        requiredFields={['name']}
+        additionalFields={['description', 'unit', 'category']}
+      />
+
+      <EntitySearchModal
+        visible={isVendorModalVisible}
+        onClose={() => setIsVendorModalVisible(false)}
+        onSelect={handleVendorSelect}
+        entityType="vendor"
+        searchEndpoint="/contact/getByText"
+        createEndpoint="/contact"
+        updateEndpoint="/contact"
+        requiredFields={['name']}
+        additionalFields={['phone', 'email', 'address']}
       />
     </ScrollView>
   );
