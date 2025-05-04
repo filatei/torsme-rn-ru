@@ -281,7 +281,7 @@ export default function ExpenseDetail() {
       </View>
 
       {/* Only show Mark as PAID if not APPROVED and eligible */}
-      {showMarkAsPaid && (
+      { (
         <ExpenseStatusUpdate
           nextStatuses={nextStatuses}
           isUpdating={isUpdating}

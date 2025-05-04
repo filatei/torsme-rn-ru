@@ -3,9 +3,9 @@ import { View, Alert, Platform } from 'react-native';
 import { Text } from '~/components/ui/text';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
-import { Picker } from '@react-native-picker/picker';
 import Modal from 'react-native-modal';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { ListPicker, ListPickerItem } from './ListPicker';
 
 interface Bank {
   name: string;
@@ -27,6 +27,10 @@ export function ExpensePayment({ balance, banks, onMakePayment, userName, isVisi
   const [isPaying, setIsPaying] = useState(false);
   const [paymentDate, setPaymentDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showBankPicker, setShowBankPicker] = useState(false);
+
+  // Prepare items for ListPicker (bank list)
+  const bankItems: ListPickerItem[] = banks.map(bank => ({ label: bank.name, value: bank.name }));
 
   const handlePayment = async () => {
     if (!paymentAmount || isNaN(Number(paymentAmount)) || Number(paymentAmount) <= 0) {
@@ -73,8 +77,6 @@ export function ExpensePayment({ balance, banks, onMakePayment, userName, isVisi
     if (selectedDate) setPaymentDate(selectedDate);
   };
 
-  console.log('Banks in ExpensePayment:', banks);
-
   // Always render DateTimePicker, but hide it when not needed
   const datePickerStyle = showDatePicker ? {} : { position: 'absolute' as const, left: -9999 };
 
@@ -93,23 +95,25 @@ export function ExpensePayment({ balance, banks, onMakePayment, userName, isVisi
           keyboardType="numeric"
           className="mb-2"
         />
-        <View className="border border-input rounded-md bg-background mb-2">
-          <Picker
-            selectedValue={paymentAccount}
-            onValueChange={setPaymentAccount}
-            style={{ color: '#222' }}
+        <View className="mb-2">
+          <Text className="text-foreground/70 mb-1">Bank Account</Text>
+          <Button
+            variant="outline"
+            className="mb-2"
+            onPress={() => setShowBankPicker(true)}
           >
-            <Picker.Item label="Select Bank Account" value="" color="#888" />
-            <Picker.Item label="CASH" value="CASH" color="#222" />
-            {banks.map((bank) => (
-              <Picker.Item 
-                key={bank.code} 
-                label={bank.name} 
-                value={bank.name}
-                color="#222"
-              />
-            ))}
-          </Picker>
+            <Text className="text-foreground">
+              {paymentAccount || 'Select Bank Account'}
+            </Text>
+          </Button>
+          <ListPicker
+            items={[{ label: 'CASH', value: 'CASH' }, ...bankItems]}
+            value={paymentAccount}
+            onChange={setPaymentAccount}
+            placeholder="Select Bank Account"
+            visible={showBankPicker}
+            onClose={() => setShowBankPicker(false)}
+          />
         </View>
         <Button variant="outline" className="mb-2" onPress={() => setShowDatePicker(true)}>
           <Text className="text-foreground">
