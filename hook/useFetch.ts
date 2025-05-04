@@ -8,7 +8,7 @@ export function useFetch<T = any>(baseUrl: string) {
   const [error, setError] = useState<Error | null>(null);
   const { token } = useAuth();
 
-  const fetch = useCallback(async (endpoint: string, options: RequestInit = {}): Promise<T | null> => {
+  const fetchData = useCallback(async (endpoint: string, options: RequestInit = {}): Promise<T | null> => {
     try {
       setLoading(true);
       setError(null);
@@ -22,12 +22,13 @@ export function useFetch<T = any>(baseUrl: string) {
       console.log('Fetching:', `${baseUrl}${endpoint}`);
       console.log('Headers:', headers);
 
-      const response = await global.fetch(`${baseUrl}${endpoint}`, {
+      const response = await fetch(`${baseUrl}${endpoint}`, {
         ...options,
         headers,
       });
 
-    //   console.log('Response status:', response.status);
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
       if (response.status === 401) {
         console.log('Unauthorized - redirecting to login');
@@ -35,14 +36,30 @@ export function useFetch<T = any>(baseUrl: string) {
         return null;
       }
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.log('Error response:', errorData);
-        throw new Error(errorData.message || 'Something went wrong');
+      const contentType = response.headers.get('content-type');
+      console.log('Content-Type:', contentType);
+
+      if (!contentType?.includes('application/json')) {
+        const text = await response.text();
+        console.log('Non-JSON response:', text);
+        if (!response.ok) {
+          throw new Error(`Server returned ${response.status}: ${text}`);
+        }
+        try {
+          const responseData = JSON.parse(text);
+          console.log('Parsed response data:', responseData);
+          setData(responseData);
+          return responseData;
+        } catch (e) {
+          console.log('Failed to parse response as JSON:', e);
+          setData(null);
+          return null;
+        }
       }
 
-      const responseData: T = await response.json();
-    //   console.log('Response data:', responseData);
+      const responseData = await response.json();
+      console.log('JSON response data:', responseData);
+      
       setData(responseData);
       return responseData;
     } catch (err) {
@@ -59,7 +76,7 @@ export function useFetch<T = any>(baseUrl: string) {
     setData(prevData => updater(prevData));
   }, []);
 
-  return { data, loading, error, fetch, optimisticUpdate };
+  return { data, loading, error, fetch: fetchData, optimisticUpdate };
 }
 
 // export  useFetch;

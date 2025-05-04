@@ -4,13 +4,12 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "~/*": [
-        "*"
-      ],
-      "@/*": [
-        "*"
-      ]
-    }
+      "~/*": ["./*"],
+      "@/*": ["./*"]
+    },
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true
   },
   "include": [
     "**/*.ts",
