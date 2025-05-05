@@ -19,6 +19,12 @@ import { ExpenseStatusUpdate } from '~/components/expense/ExpenseStatusUpdate';
 import { ExpensePayment } from '~/components/expense/ExpensePayment';
 import { ExpenseNotes } from '~/components/expense/ExpenseNotes';
 import { ExpensePaymentHistory } from '~/components/expense/ExpensePaymentHistory';
+import { ExpenseItemRow } from '~/components/expense/ExpenseItemRow';
+import { PaymentHistoryRow } from '~/components/expense/PaymentHistoryRow';
+import { NoteRow } from '~/components/expense/NoteRow';
+import { SectionHeader } from '~/components/expense/SectionHeader';
+import { FlatList } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 type ExpenseStatus = 'DRAFT' | 'VALIDATED' | 'REVIEWED' | 'APPROVED' | 'PAID' | 'PART-PAY';
 
@@ -54,6 +60,13 @@ interface Expense {
     status?: string;
     note?: { text: string };
     products?: Array<{ name: string }>;
+  }>;
+  products?: Array<{
+    name: string;
+    quantity?: number;
+    price?: number;
+    total?: number;
+    [key: string]: any;
   }>;
 }
 
@@ -94,12 +107,14 @@ export default function ExpenseDetail() {
   const [isPayModalVisible, setIsPayModalVisible] = useState(false);
   const [banks, setBanks] = useState<{ name: string; code: string }[]>([]);
   const [noteImage, setNoteImage] = useState<string | null>(null);
-
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   const { data: response, loading, error, fetch: fetchData } = useFetch<ExpenseResponse>(getApiUrl());
+  const { fetch } = useFetch(getApiUrl());
   const expense = response?.expense;
 
-  // const { data: banksResponse } = useFetch<BanksResponse>('/banks');
-  const { fetch } = useFetch(getApiUrl());
   const loadBanks = async () => {
     const res = await fetch('/banks');
     setBanks(res.data.map((bank: any) => ({
@@ -107,7 +122,6 @@ export default function ExpenseDetail() {
       code: bank.code
     })));
   }
-
 
   console.log('Full response:', response);
   console.log('Expense from full response:', response?.expense);
@@ -239,6 +253,49 @@ export default function ExpenseDetail() {
     }
   };
 
+  const handleDeleteExpense = async () => {
+    if (!expense) return;
+    setIsDeleting(true);
+    try {
+      await fetchData(`/expense/${expense._id}`, {
+        method: 'DELETE',
+      });
+      // Navigate back to expenses list regardless of response shape
+      router.replace('/(tabs)/expenses');
+    } catch (err) {
+      Alert.alert('Delete Failed', 'Could not delete expense.');
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+    }
+  };
+
+  const canDelete = expense && !['PAID', 'APPROVED', 'PART-PAY'].includes(expense.status);
+  const canReset = expense && expense.status !== 'DRAFT';
+
+  const handleResetExpense = async () => {
+    if (!expense) return;
+    setIsResetting(true);
+    try {
+      const res = await fetchData(`/expense/${expense._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...expense,
+          status: 'DRAFT',
+          payHistory: [],
+          notes: [],
+        }),
+      });
+      if (res) setRefresh(r => r + 1);
+    } catch (err) {
+      Alert.alert('Reset Failed', 'Could not reset expense.');
+    } finally {
+      setIsResetting(false);
+      setShowResetModal(false);
+    }
+  };
+
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center">
@@ -273,23 +330,72 @@ export default function ExpenseDetail() {
           status={expense.status}
           balance={expense.balance ?? 0}
         />
-        {showPayment && (
-          <Button className="ml-2 bg-primary" onPress={() => setShowPayModal(true)}>
-            <Text className="text-primary-foreground">Pay</Text>
-          </Button>
-        )}
+        <View className="flex-row items-center">
+          {canReset && (
+            <Button
+              variant="ghost"
+              className="mr-2"
+              onPress={() => setShowResetModal(true)}
+              disabled={isResetting}
+            >
+              <Ionicons name="refresh" size={22} color="#888" />
+            </Button>
+          )}
+          {canDelete && (
+            <Button
+              variant="ghost"
+              onPress={() => setShowDeleteModal(true)}
+              disabled={isDeleting}
+            >
+              <Ionicons name="trash" size={22} color="#e11d48" />
+            </Button>
+          )}
+        </View>
       </View>
 
-      {/* Only show Mark as PAID if not APPROVED and eligible */}
-      { (
+      {/* Items Section */}
+      <SectionHeader title="Items" />
+      <FlatList
+        data={expense.products || []}
+        renderItem={({ item }) => <ExpenseItemRow item={item} />}
+        keyExtractor={(_, idx) => idx.toString()}
+        ListEmptyComponent={<Text className="text-muted-foreground">No items</Text>}
+        scrollEnabled={false}
+      />
+
+      {/* Payment History Section */}
+      <SectionHeader title="Payment History" />
+      <FlatList
+        data={expense.payHistory || []}
+        renderItem={({ item }) => <PaymentHistoryRow item={item} />}
+        keyExtractor={(_, idx) => idx.toString()}
+        ListEmptyComponent={<Text className="text-muted-foreground">No payments</Text>}
+        scrollEnabled={false}
+      />
+
+      {/* Notes Section */}
+      <SectionHeader title="Notes" />
+      <FlatList
+        data={expense.notes || []}
+        renderItem={({ item }) => <NoteRow item={item} />}
+        keyExtractor={(_, idx) => idx.toString()}
+        ListEmptyComponent={<Text className="text-muted-foreground">No notes</Text>}
+        scrollEnabled={false}
+      />
+
+      {/* Actions and Add Note remain as before */}
+      {showPayment && (
+        <Button className="mt-4 bg-primary" onPress={() => setShowPayModal(true)}>
+          <Text className="text-primary-foreground">Pay</Text>
+        </Button>
+      )}
+      {showMarkAsPaid && (
         <ExpenseStatusUpdate
           nextStatuses={nextStatuses}
           isUpdating={isUpdating}
           onUpdateStatus={updateStatus}
         />
       )}
-
-      {/* Always render ExpensePayment, control modal with isVisible */}
       <ExpensePayment
         balance={expense.balance ?? 0}
         banks={banks}
@@ -298,17 +404,41 @@ export default function ExpenseDetail() {
         isVisible={showPayment && showPayModal}
         onClose={() => setShowPayModal(false)}
       />
-
-      {expense.payHistory && (
-        <ExpensePaymentHistory payments={expense.payHistory} />
-      )}
-
       <ExpenseNotes
         notes={expense.notes || []}
         onAddNote={addNote}
         isUpdating={isUpdating}
         userName={user?.name || 'User'}
       />
+      <Modal isVisible={showDeleteModal} onBackdropPress={() => setShowDeleteModal(false)}>
+        <View className="bg-background p-6 rounded-lg">
+          <Text className="text-lg font-bold mb-4 text-foreground">Delete Expense?</Text>
+          <Text className="mb-4 text-foreground">Are you sure you want to delete this expense? This action cannot be undone.</Text>
+          <View className="flex-row justify-end space-x-2">
+            <Button variant="outline" onPress={() => setShowDeleteModal(false)}>
+              <Text>Cancel</Text>
+            </Button>
+            <Button className="bg-destructive" onPress={handleDeleteExpense} disabled={isDeleting}>
+              <Text className="text-white">{isDeleting ? 'Deleting...' : 'Delete'}</Text>
+            </Button>
+          </View>
+        </View>
+      </Modal>
+      {/* Reset Confirmation Modal */}
+      <Modal isVisible={showResetModal} onBackdropPress={() => setShowResetModal(false)}>
+        <View className="bg-background p-6 rounded-lg">
+          <Text className="text-lg font-bold mb-4 text-foreground">Reset Expense?</Text>
+          <Text className="mb-4 text-foreground">Are you sure you want to reset this expense to draft? This will clear all payment and notes history.</Text>
+          <View className="flex-row justify-end space-x-2">
+            <Button variant="outline" onPress={() => setShowResetModal(false)}>
+              <Text>Cancel</Text>
+            </Button>
+            <Button className="bg-primary" onPress={handleResetExpense} disabled={isResetting}>
+              <Text className="text-white">{isResetting ? 'Resetting...' : 'Reset'}</Text>
+            </Button>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
