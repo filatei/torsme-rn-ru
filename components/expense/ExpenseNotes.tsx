@@ -24,9 +24,10 @@ interface ExpenseNotesProps {
   onAddNote: (text: string, image: string | null, file?: File | null) => Promise<void>;
   isUpdating: boolean;
   userName: string;
+  onChanged?: () => void;
 }
 
-export function ExpenseNotes({ notes: initialNotes, onAddNote, isUpdating, userName }: ExpenseNotesProps) {
+export function ExpenseNotes({ notes: initialNotes, onAddNote, isUpdating, userName, onChanged }: ExpenseNotesProps) {
   const [notes, setNotes] = useState(initialNotes);
   const [newNote, setNewNote] = useState('');
   const [noteImage, setNoteImage] = useState<string | null>(null); // for preview
@@ -103,6 +104,7 @@ export function ExpenseNotes({ notes: initialNotes, onAddNote, isUpdating, userN
     setNewNote('');
     setNoteImage(null);
     setNoteImageFile(null);
+    if (onChanged) onChanged();
   };
 
   const handleDeleteNote = async (noteIdx: number) => {
@@ -119,6 +121,7 @@ export function ExpenseNotes({ notes: initialNotes, onAddNote, isUpdating, userN
     } finally {
       setDeletingIndex(null);
       setDeleteDialogIdx(null);
+      if (onChanged) onChanged();
     }
   };
 

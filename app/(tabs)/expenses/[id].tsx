@@ -155,6 +155,7 @@ export default function ExpenseDetail() {
   }, []);
 
   const updateStatus = async (newStatus: ExpenseStatus) => {
+    if (!expense) return;
     setIsUpdating(true);
     try {
       const response = await fetchData(`/expense/${id}`, {
@@ -163,7 +164,16 @@ export default function ExpenseDetail() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          ...expense,
           status: newStatus,
+          statusHistory: [
+            {
+              oldStatus: expense.status,
+              newStatus,
+              updater: user?.name || 'User',
+            },
+            ...(expense.statusHistory || []),
+          ],
         }),
       });
       if (response) {
@@ -302,6 +312,10 @@ export default function ExpenseDetail() {
   const handleStatusUpdate = (status: ExpenseStatus) => {
     setShowStatusModal(false);
     updateStatus(status);
+  };
+
+  const handleNoteChanged = () => {
+    setRefresh(r => r + 1);
   };
 
   if (loading) {
@@ -473,6 +487,7 @@ export default function ExpenseDetail() {
         onAddNote={addNote}
         isUpdating={isUpdating}
         userName={user?.name || 'User'}
+        onChanged={handleNoteChanged}
       />
       <Modal isVisible={showDeleteModal} onBackdropPress={() => setShowDeleteModal(false)}>
         <View className="bg-background p-6 rounded-lg">
