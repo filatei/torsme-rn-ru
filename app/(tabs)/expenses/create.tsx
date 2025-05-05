@@ -1,8 +1,8 @@
-import { View, ScrollView, ActivityIndicator } from 'react-native';
+import { View, ScrollView, ActivityIndicator, NativeScrollEvent, NativeSyntheticEvent, TouchableOpacity } from 'react-native';
 import { Text } from '~/components/ui/text';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { useFetch } from '~/hook/useFetch';
 import { getApiUrl } from '~/utils/config';
@@ -10,6 +10,7 @@ import { EntitySearchModal } from '~/components/entity-search-modal';
 import { Card } from '~/components/ui/card';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
+import Modal from 'react-native-modal';
 
 interface Product {
   _id: string;
@@ -40,6 +41,8 @@ interface ExpenseProduct extends Product {
 
 export default function CreateExpense() {
   const router = useRouter();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [scrollPosition, setScrollPosition] = useState(0);
   const [title, setTitle] = useState('');
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [products, setProducts] = useState<ExpenseProduct[]>([]);
@@ -56,6 +59,9 @@ export default function CreateExpense() {
   const [type, setType] = useState('Daily Imprest');
   const [category, setCategory] = useState('General');
   const [expenseAccount, setExpenseAccount] = useState('Operations');
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [lastScrollPosition, setLastScrollPosition] = useState(0);
+  const [isFirstProductSelect, setIsFirstProductSelect] = useState(true);
 
   const { fetch } = useFetch(getApiUrl());
 
@@ -75,10 +81,28 @@ export default function CreateExpense() {
 
   const handleProductSelect = (product: Product) => {
     setCurrentProduct(product);
+    
+    // Restore scroll position after modal closes
+    setTimeout(() => {
+      if (isFirstProductSelect) {
+        // For first product selection, scroll to products section
+        const productsSection = 600; // Approximate position of products section
+        scrollViewRef.current?.scrollTo({ y: productsSection, animated: false });
+        setIsFirstProductSelect(false);
+      } else {
+        // For subsequent selections, restore last position
+        scrollViewRef.current?.scrollTo({ y: lastScrollPosition, animated: false });
+      }
+    }, 100);
   };
 
   const handleVendorSelect = (selectedVendor: Vendor) => {
     setVendor(selectedVendor);
+    
+    // Restore scroll position after modal closes
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({ y: lastScrollPosition, animated: false });
+    }, 100);
   };
 
   const handleQtyChange = (value: string) => {
@@ -174,8 +198,29 @@ export default function CreateExpense() {
     }
   };
 
+  const handleCreateClick = () => {
+    setShowConfirmModal(true);
+  };
+
+  const typeOptions = [
+    { label: 'Daily Imprest', value: 'Daily Imprest' },
+    { label: 'Non Cash', value: 'Non Cash' },
+  ];
+
   return (
-    <ScrollView className="flex-1 bg-background p-4">
+    <ScrollView 
+      ref={scrollViewRef}
+      className="flex-1 bg-background p-4"
+      onScroll={(event: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const currentPosition = event.nativeEvent.contentOffset.y;
+        setScrollPosition(currentPosition);
+        // Only update lastScrollPosition if we're not in the process of selecting first product
+        if (!isFirstProductSelect) {
+          setLastScrollPosition(currentPosition);
+        }
+      }}
+      scrollEventThrottle={16}
+    >
       <Card className="p-4 mb-4">
         <Text className="text-lg font-bold mb-4">Create New Expense</Text>
 
@@ -220,15 +265,44 @@ export default function CreateExpense() {
 
         <View className="mb-4">
           <Text className="text-muted-foreground mb-2">Type</Text>
-          <View className="border border-input rounded-md bg-background">
-            <Picker
-              selectedValue={type}
-              onValueChange={setType}
-            >
-              <Picker.Item label="Daily Imprest" value="Daily Imprest" />
-              <Picker.Item label="Non Cash" value="Non Cash" />
-            </Picker>
+          <View className="flex-row gap-4 items-center justify-start">
+            {typeOptions.map(option => (
+              <TouchableOpacity
+                key={option.value}
+                onPress={() => setType(option.value)}
+                style={{ flexDirection: 'row', alignItems: 'center', marginRight: 16 }}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: type === option.value }}
+              >
+                <View
+                  style={{
+                    height: 20,
+                    width: 20,
+                    borderRadius: 10,
+                    borderWidth: 2,
+                    borderColor: type === option.value ? '#2563eb' : '#ccc',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 6,
+                    backgroundColor: '#fff',
+                  }}
+                >
+                  {type === option.value && (
+                    <View
+                      style={{
+                        height: 10,
+                        width: 10,
+                        borderRadius: 5,
+                        backgroundColor: '#2563eb',
+                      }}
+                    />
+                  )}
+                </View>
+                <Text style={{ color: type === option.value ? '#2563eb' : '#222', fontWeight: type === option.value ? 'bold' : 'normal' }}>{option.label}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
+          {/* // TODO: Add animation for radio selection in the future */}
         </View>
 
         <View className="mb-4">
@@ -340,7 +414,7 @@ export default function CreateExpense() {
         </View>
 
         <Button
-          onPress={handleSubmit}
+          onPress={handleCreateClick}
           disabled={isSubmitting || !title || !vendor || products.length === 0}
           className="w-full"
         >
@@ -354,7 +428,13 @@ export default function CreateExpense() {
 
       <EntitySearchModal
         visible={isProductModalVisible}
-        onClose={() => setIsProductModalVisible(false)}
+        onClose={() => {
+          setIsProductModalVisible(false);
+          // Restore scroll position after modal closes
+          setTimeout(() => {
+            scrollViewRef.current?.scrollTo({ y: scrollPosition, animated: false });
+          }, 100);
+        }}
         onSelect={handleProductSelect}
         entityType="product"
         searchEndpoint="/stockitem/getByText"
@@ -366,7 +446,13 @@ export default function CreateExpense() {
 
       <EntitySearchModal
         visible={isVendorModalVisible}
-        onClose={() => setIsVendorModalVisible(false)}
+        onClose={() => {
+          setIsVendorModalVisible(false);
+          // Restore scroll position after modal closes
+          setTimeout(() => {
+            scrollViewRef.current?.scrollTo({ y: scrollPosition, animated: false });
+          }, 100);
+        }}
         onSelect={handleVendorSelect}
         entityType="vendor"
         searchEndpoint="/contact/getByText"
@@ -375,6 +461,96 @@ export default function CreateExpense() {
         requiredFields={['name']}
         additionalFields={['phone', 'email', 'address']}
       />
+
+      {/* Confirmation Modal */}
+      <Modal 
+        isVisible={showConfirmModal} 
+        onBackdropPress={() => setShowConfirmModal(false)}
+        className="m-0"
+      >
+        <View className="bg-background p-6 rounded-lg">
+          <Text className="text-lg font-bold mb-4 text-foreground">Confirm Expense Details</Text>
+          
+          <ScrollView className="max-h-[60vh]">
+            <View className="space-y-4">
+              <View>
+                <Text className="text-sm text-muted-foreground">Title</Text>
+                <Text className="text-base">{title}</Text>
+              </View>
+
+              <View>
+                <Text className="text-sm text-muted-foreground">Date</Text>
+                <Text className="text-base">{date.toLocaleDateString()}</Text>
+              </View>
+
+              <View>
+                <Text className="text-sm text-muted-foreground">Vendor</Text>
+                <Text className="text-base">{vendor?.name}</Text>
+              </View>
+
+              <View>
+                <Text className="text-sm text-muted-foreground">Site</Text>
+                <Text className="text-base">{site}</Text>
+              </View>
+
+              <View>
+                <Text className="text-sm text-muted-foreground">Type</Text>
+                <Text className="text-base">{type}</Text>
+              </View>
+
+              <View>
+                <Text className="text-sm text-muted-foreground">Category</Text>
+                <Text className="text-base">{category}</Text>
+              </View>
+
+              <View>
+                <Text className="text-sm text-muted-foreground">Expense Account</Text>
+                <Text className="text-base">{expenseAccount}</Text>
+              </View>
+
+              <View>
+                <Text className="text-sm text-muted-foreground mb-2">Products</Text>
+                {products.map((product, index) => (
+                  <View key={index} className="bg-muted p-3 rounded-lg mb-2">
+                    <Text className="font-medium">{product.name}</Text>
+                    <Text className="text-sm text-muted-foreground">
+                      {product.qty} x ₦{product.price.toLocaleString()} = ₦{product.amount.toLocaleString()}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              <View>
+                <Text className="text-sm text-muted-foreground">Total Amount</Text>
+                <Text className="text-xl font-bold">
+                  ₦{getTotalAmount().toLocaleString()}
+                </Text>
+              </View>
+            </View>
+          </ScrollView>
+
+          <View className="flex-row justify-end space-x-2 mt-4">
+            <Button 
+              variant="outline" 
+              onPress={() => setShowConfirmModal(false)}
+            >
+              <Text>Cancel</Text>
+            </Button>
+            <Button 
+              className="bg-primary" 
+              onPress={() => {
+                setShowConfirmModal(false);
+                handleSubmit();
+              }}
+              disabled={isSubmitting}
+            >
+              <Text className="text-white">
+                {isSubmitting ? 'Creating...' : 'Confirm & Create'}
+              </Text>
+            </Button>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 } 
