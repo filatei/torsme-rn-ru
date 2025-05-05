@@ -25,6 +25,7 @@ import { NoteRow } from '~/components/expense/NoteRow';
 import { SectionHeader } from '~/components/expense/SectionHeader';
 import { FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip';
 
 type ExpenseStatus = 'DRAFT' | 'VALIDATED' | 'REVIEWED' | 'APPROVED' | 'PAID' | 'PART-PAY';
 
@@ -87,7 +88,7 @@ const statusFlow: Record<ExpenseStatus, ExpenseStatus[]> = {
   DRAFT: ['VALIDATED'],
   VALIDATED: ['REVIEWED'],
   REVIEWED: ['APPROVED'],
-  APPROVED: ['PAID'],
+  APPROVED: ['PART-PAY', 'PAID'],
   PAID: [],
   'PART-PAY': ['PAID'],
 };
@@ -114,6 +115,8 @@ export default function ExpenseDetail() {
   const { data: response, loading, error, fetch: fetchData } = useFetch<ExpenseResponse>(getApiUrl());
   const { fetch } = useFetch(getApiUrl());
   const expense = response?.expense;
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState<ExpenseStatus | null>(null);
 
   const loadBanks = async () => {
     const res = await fetch('/banks');
@@ -296,6 +299,11 @@ export default function ExpenseDetail() {
     }
   };
 
+  const handleStatusUpdate = (status: ExpenseStatus) => {
+    setShowStatusModal(false);
+    updateStatus(status);
+  };
+
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center">
@@ -317,41 +325,109 @@ export default function ExpenseDetail() {
 
   // Only show payment if status is APPROVED or PART-PAY and balance > 0
   const showPayment = (expense.status === 'APPROVED' || expense.status === 'PART-PAY') && (expense.balance ?? 0) > 0;
-  const showMarkAsPaid = expense.status !== 'APPROVED' && (expense.balance ?? 0) > 0 && nextStatuses.includes('PAID');
+  // Only show status update for transitions from DRAFT to APPROVED
+  const showStatusUpdate = ['DRAFT', 'VALIDATED', 'REVIEWED'].includes(expense.status);
 
   return (
     <ScrollView className="flex-1 bg-background p-4">
       <View className="flex-row justify-between items-center mb-2">
-        <ExpenseHeader
-          title={expense.title}
-          amount={expense.txn_amount}
-          vendor={expense.vendor?.name || ''}
-          date={expense.date}
-          status={expense.status}
-          balance={expense.balance ?? 0}
-        />
-        <View className="flex-row items-center">
+        <Text className="text-xl font-bold text-foreground">Expense Details</Text>
+        <View className="flex-row items-center space-x-4">
+          {showPayment && (
+            <View className="items-center">
+              <Tooltip>
+                <TooltipTrigger>
+                  <Button
+                    variant="ghost"
+                    onPress={() => setShowPayModal(true)}
+                    className="p-2"
+                  >
+                    <Ionicons name="cash-outline" size={22} color="#2563eb" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <Text>Pay</Text>
+                </TooltipContent>
+              </Tooltip>
+              <Text className="text-xs text-center text-muted-foreground mt-1">Pay</Text>
+            </View>
+          )}
+          {showStatusUpdate && (
+            <View className="items-center">
+              <Tooltip>
+                <TooltipTrigger>
+                  <Button
+                    variant="ghost"
+                    onPress={() => {
+                      if (nextStatuses.length === 1) {
+                        setSelectedStatus(nextStatuses[0]);
+                        setShowStatusModal(true);
+                      } else {
+                        setShowStatusModal(true);
+                      }
+                    }}
+                    className="p-2"
+                  >
+                    <Ionicons name="checkmark-done" size={22} color="#22c55e" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <Text>Update Status</Text>
+                </TooltipContent>
+              </Tooltip>
+              <Text className="text-xs text-center text-muted-foreground mt-1">Status</Text>
+            </View>
+          )}
           {canReset && (
-            <Button
-              variant="ghost"
-              className="mr-2"
-              onPress={() => setShowResetModal(true)}
-              disabled={isResetting}
-            >
-              <Ionicons name="refresh" size={22} color="#888" />
-            </Button>
+            <View className="items-center">
+              <Tooltip>
+                <TooltipTrigger>
+                  <Button
+                    variant="ghost"
+                    onPress={() => setShowResetModal(true)}
+                    disabled={isResetting}
+                    className="p-2"
+                  >
+                    <Ionicons name="refresh" size={22} color="#888" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <Text>Reset to Draft</Text>
+                </TooltipContent>
+              </Tooltip>
+              <Text className="text-xs text-center text-muted-foreground mt-1">Reset</Text>
+            </View>
           )}
           {canDelete && (
-            <Button
-              variant="ghost"
-              onPress={() => setShowDeleteModal(true)}
-              disabled={isDeleting}
-            >
-              <Ionicons name="trash" size={22} color="#e11d48" />
-            </Button>
+            <View className="items-center">
+              <Tooltip>
+                <TooltipTrigger>
+                  <Button
+                    variant="ghost"
+                    onPress={() => setShowDeleteModal(true)}
+                    disabled={isDeleting}
+                    className="p-2"
+                  >
+                    <Ionicons name="trash" size={22} color="#e11d48" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <Text>Delete</Text>
+                </TooltipContent>
+              </Tooltip>
+              <Text className="text-xs text-center text-muted-foreground mt-1">Delete</Text>
+            </View>
           )}
         </View>
       </View>
+      <ExpenseHeader
+        title={expense.title}
+        amount={expense.txn_amount}
+        vendor={expense.vendor?.name || ''}
+        date={expense.date}
+        status={expense.status}
+        balance={expense.balance ?? 0}
+      />
 
       {/* Items Section */}
       <SectionHeader title="Items" />
@@ -383,19 +459,7 @@ export default function ExpenseDetail() {
         scrollEnabled={false}
       />
 
-      {/* Actions and Add Note remain as before */}
-      {showPayment && (
-        <Button className="mt-4 bg-primary" onPress={() => setShowPayModal(true)}>
-          <Text className="text-primary-foreground">Pay</Text>
-        </Button>
-      )}
-      {showMarkAsPaid && (
-        <ExpenseStatusUpdate
-          nextStatuses={nextStatuses}
-          isUpdating={isUpdating}
-          onUpdateStatus={updateStatus}
-        />
-      )}
+      {/* Remove the redundant pay button */}
       <ExpensePayment
         balance={expense.balance ?? 0}
         banks={banks}
@@ -435,6 +499,25 @@ export default function ExpenseDetail() {
             </Button>
             <Button className="bg-primary" onPress={handleResetExpense} disabled={isResetting}>
               <Text className="text-white">{isResetting ? 'Resetting...' : 'Reset'}</Text>
+            </Button>
+          </View>
+        </View>
+      </Modal>
+      {/* Status Update Modal */}
+      <Modal isVisible={showStatusModal} onBackdropPress={() => setShowStatusModal(false)}>
+        <View className="bg-background p-6 rounded-lg">
+          <Text className="text-lg font-bold mb-4 text-foreground">Update Status</Text>
+          <Text className="mb-4 text-foreground">Are you sure you want to update the status to {selectedStatus || nextStatuses[0]}?</Text>
+          <View className="flex-row justify-end space-x-2">
+            <Button variant="outline" onPress={() => setShowStatusModal(false)}>
+              <Text>Cancel</Text>
+            </Button>
+            <Button 
+              className="bg-primary" 
+              onPress={() => handleStatusUpdate(selectedStatus || nextStatuses[0])} 
+              disabled={isUpdating}
+            >
+              <Text className="text-white">{isUpdating ? 'Updating...' : 'Update'}</Text>
             </Button>
           </View>
         </View>
