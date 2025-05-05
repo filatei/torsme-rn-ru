@@ -13,8 +13,14 @@ export function useFetch<T = any>(baseUrl: string) {
       setLoading(true);
       setError(null);
 
+      // Determine if body is FormData
+      const isFormData = options.body instanceof FormData;
+
+      // Only set Content-Type if not FormData
       const headers = {
-        'Content-Type': 'application/json',
+        ...(isFormData
+          ? {} // Let browser set Content-Type for FormData
+          : { 'Content-Type': 'application/json' }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       };
