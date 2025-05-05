@@ -5,7 +5,7 @@ import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import Modal from 'react-native-modal';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { ListPicker, ListPickerItem } from './ListPicker';
+import { ListPicker, ListPickerItem } from '../ListPicker';
 
 interface Bank {
   name: string;
