@@ -1,4 +1,4 @@
-import { View, Image } from 'react-native';
+import { View, Image, Platform } from 'react-native';
 import { Text } from '~/components/ui/text';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -32,6 +32,13 @@ export function ExpenseNotes({ notes, onAddNote, isUpdating, userName }: Expense
     });
     if (!result.canceled && result.assets[0].uri) {
       setNoteImage(result.assets[0].uri);
+    }
+  };
+
+  const handleWebFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setNoteImage(URL.createObjectURL(file));
     }
   };
 
@@ -69,9 +76,18 @@ export function ExpenseNotes({ notes, onAddNote, isUpdating, userName }: Expense
             placeholder="Enter note..."
             className="flex-1"
           />
-          <Button onPress={pickNoteImage} variant="outline">
-            <Text>{noteImage ? 'Change Image' : 'Add Image'}</Text>
-          </Button>
+          {Platform.OS === 'web' ? (
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleWebFileChange}
+              style={{ marginLeft: 8 }}
+            />
+          ) : (
+            <Button onPress={pickNoteImage} variant="outline">
+              <Text>{noteImage ? 'Change Image' : 'Add Image'}</Text>
+            </Button>
+          )}
         </View>
         {noteImage && (
           <Image source={{ uri: noteImage }} className="w-24 h-24 mb-2 rounded-lg" />

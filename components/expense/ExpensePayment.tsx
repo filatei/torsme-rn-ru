@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { View, Alert, Platform } from 'react-native';
+import { View, Alert, Platform, TouchableOpacity } from 'react-native';
 import { Text } from '~/components/ui/text';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import Modal from 'react-native-modal';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { ListPicker, ListPickerItem } from '../ListPicker';
+import { ConfirmDialog } from '~/components/ConfirmDialog';
+import { Ionicons } from '@expo/vector-icons';
 
 interface Bank {
   name: string;
@@ -21,6 +23,24 @@ interface ExpensePaymentProps {
   onClose?: () => void;
 }
 
+// Cross-platform confirm dialog
+async function confirmDialog(message: string): Promise<boolean> {
+  if (Platform.OS === 'web') {
+    return window.confirm(message);
+  } else {
+    return new Promise(resolve => {
+      Alert.alert(
+        'Confirm Payment',
+        message,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Confirm', onPress: () => resolve(true) }
+        ]
+      );
+    });
+  }
+}
+
 export function ExpensePayment({ balance, banks, onMakePayment, userName, isVisible, onClose }: ExpensePaymentProps) {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentAccount, setPaymentAccount] = useState('CASH');
@@ -28,6 +48,8 @@ export function ExpensePayment({ balance, banks, onMakePayment, userName, isVisi
   const [paymentDate, setPaymentDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showBankPicker, setShowBankPicker] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingPayment, setPendingPayment] = useState<{ amount: number; account: string; date: string } | null>(null);
 
   // Prepare items for ListPicker (bank list)
   const bankItems: ListPickerItem[] = banks.map(bank => ({ label: bank.name, value: bank.name }));
@@ -41,35 +63,28 @@ export function ExpensePayment({ balance, banks, onMakePayment, userName, isVisi
       Alert.alert('Amount too high', 'Payment cannot exceed balance.');
       return;
     }
+    setPendingPayment({
+      amount: Number(paymentAmount),
+      account: paymentAccount,
+      date: paymentDate.toISOString(),
+    });
+    setShowConfirm(true);
+  };
 
-    const newBalance = balance - Number(paymentAmount);
-    const status = newBalance === 0 ? 'PAID' : 'PART-PAY';
-
-    Alert.alert(
-      'Confirm Payment',
-      `Are you sure you want to make a payment of ₦${Number(paymentAmount).toLocaleString()}?\n\n` +
-      `Current Balance: ₦${balance.toLocaleString()}\n` +
-      `New Balance: ₦${newBalance.toLocaleString()}\n` +
-      `Status will be updated to: ${status}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            setIsPaying(true);
-            try {
-              await onMakePayment(Number(paymentAmount), paymentAccount, paymentDate.toISOString());
-              setPaymentAmount('');
-              if (onClose) onClose();
-            } catch (err) {
-              Alert.alert('Payment failed', 'Could not process payment.');
-            } finally {
-              setIsPaying(false);
-            }
-          },
-        },
-      ]
-    );
+  const confirmAndPay = async () => {
+    if (!pendingPayment) return;
+    setIsPaying(true);
+    try {
+      await onMakePayment(pendingPayment.amount, pendingPayment.account, pendingPayment.date);
+      setPaymentAmount('');
+      setShowConfirm(false);
+      setPendingPayment(null);
+      if (onClose) onClose();
+    } catch (err) {
+      Alert.alert('Payment failed', 'Could not process payment.');
+    } finally {
+      setIsPaying(false);
+    }
   };
 
   const onChangeDate = (event: any, selectedDate?: Date) => {
@@ -83,7 +98,12 @@ export function ExpensePayment({ balance, banks, onMakePayment, userName, isVisi
   return (
     <Modal isVisible={!!isVisible} onBackdropPress={onClose}>
       <View className="bg-background p-4 rounded-lg">
-        <Text className="text-lg font-bold mb-2 text-foreground">Make Payment</Text>
+        <View className="flex-row justify-between items-center mb-2">
+          <Text className="text-lg font-bold text-foreground">Make Payment</Text>
+          <TouchableOpacity onPress={onClose} hitSlop={{top:8,right:8,bottom:8,left:8}}>
+            <Ionicons name="close" size={24} color="#888" />
+          </TouchableOpacity>
+        </View>
         <View className="mb-4">
           <Text className="text-foreground/70 mb-1">Outstanding Balance</Text>
           <Text className="text-2xl font-bold text-foreground">₦{balance.toLocaleString()}</Text>
@@ -156,6 +176,26 @@ export function ExpensePayment({ balance, banks, onMakePayment, userName, isVisi
             {isPaying ? 'Processing...' : 'Submit Payment'}
           </Text>
         </Button>
+        <ConfirmDialog
+          visible={showConfirm}
+          title="Confirm Payment"
+          message={
+            pendingPayment
+              ? `Are you sure you want to make a payment of ₦${pendingPayment.amount.toLocaleString()}?\n\n` +
+                `Current Balance: ₦${balance.toLocaleString()}\n` +
+                `New Balance: ₦${(balance - pendingPayment.amount).toLocaleString()}\n` +
+                `Status will be updated to: ${(balance - pendingPayment.amount) === 0 ? 'PAID' : 'PART-PAY'}`
+              : ''
+          }
+          onConfirm={confirmAndPay}
+          onCancel={() => {
+            setShowConfirm(false);
+            setPendingPayment(null);
+          }}
+          isLoading={isPaying}
+          confirmText="Confirm"
+          cancelText="Cancel"
+        />
       </View>
     </Modal>
   );
