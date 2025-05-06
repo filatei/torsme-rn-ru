@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import { View } from 'react-native';
 import Animated, { FadeInUp, FadeOutDown } from 'react-native-reanimated';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 
 import { Info } from '~/lib/icons/Info';
 import { Avatar, AvatarFallback, AvatarImage } from '~/components/ui/avatar';
@@ -78,7 +78,9 @@ export default function Screen() {
 
   return (
     <View className="flex-1 justify-center items-center gap-5 p-6 bg-secondary/30">
-      <Card className="w-full max-w-sm p-6 rounded-2xl">
+      {/* <Text>Home</Text> */}
+      <Redirect href="/expenses" />
+      {/* <Card className="w-full max-w-sm p-6 rounded-2xl">
         <CardHeader className="items-center">
           <Avatar alt="Rick Sanchez's Avatar" className="w-24 h-24">
             <AvatarImage source={{ uri: GITHUB_AVATAR_URI }} />
@@ -135,7 +137,7 @@ export default function Screen() {
             <Text>Update</Text>
           </Button>
         </CardFooter>
-      </Card>
+      </Card> */}
     </View>
   );
 }

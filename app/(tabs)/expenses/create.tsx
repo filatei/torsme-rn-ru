@@ -369,8 +369,8 @@ export default function CreateExpense() {
           ))}
 
           <View className="bg-muted p-3 rounded-lg mb-2">
-            <View className="flex-row gap-2 mb-2">
-              <View className="flex-1">
+            <View className="flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-2 w-full">
+              <View className="flex-1 min-w-0 mb-2 sm:mb-0">
                 <Button
                   onPress={() => setIsProductModalVisible(true)}
                   variant="outline"
@@ -384,7 +384,7 @@ export default function CreateExpense() {
                 onChangeText={handleQtyChange}
                 placeholder="Qty"
                 keyboardType="numeric"
-                className="w-20"
+                className="w-full sm:w-16 text-center mx-0 sm:mx-1 mb-2 sm:mb-0 flex-shrink min-w-0"
                 maxLength={5}
               />
               <Input
@@ -392,14 +392,14 @@ export default function CreateExpense() {
                 onChangeText={handlePriceChange}
                 placeholder="Price"
                 keyboardType="decimal-pad"
-                className="w-24"
+                className="w-full sm:w-20 text-center mx-0 sm:mx-1 flex-shrink min-w-0"
                 maxLength={10}
               />
             </View>
             <Button
               onPress={addProductLine}
               disabled={!currentProduct || !qty || !price || isNaN(Number(qty)) || isNaN(Number(price))}
-              className="w-full"
+              className="w-full mt-2"
             >
               <Text className="text-white">Add Product</Text>
             </Button>

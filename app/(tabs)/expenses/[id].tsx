@@ -1,6 +1,6 @@
 // app/(tabs)/expenses/[id].tsx
 
-import { View, ScrollView, ActivityIndicator, Image, Alert } from 'react-native';
+import { View, ScrollView, ActivityIndicator, Image, Alert, Modal, Pressable, Platform } from 'react-native';
 import { Text } from '~/components/ui/text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFetch } from '~/hook/useFetch';
@@ -13,7 +13,7 @@ import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '~/context/auth-context';
-import Modal from 'react-native-modal';
+import { AnimatedModal } from '~/components/ui/animated-modal';
 import { ExpenseHeader } from '~/components/expense/ExpenseHeader';
 import { ExpenseStatusUpdate } from '~/components/expense/ExpenseStatusUpdate';
 import { ExpensePayment } from '~/components/expense/ExpensePayment';
@@ -49,6 +49,7 @@ interface Expense {
   }>;
   balance?: number;
   payHistory?: Array<{
+    date: Date;
     bankAcct: string;
     paidAmount: number;
     paymentDate: string;
@@ -128,6 +129,7 @@ export default function ExpenseDetail() {
 
   console.log('Full response:', response);
   console.log('Expense from full response:', response?.expense);
+  console.log('Rendering ExpenseDetail', expense);
 
   const loadExpense = async () => {
     try {
@@ -343,97 +345,11 @@ export default function ExpenseDetail() {
   const showStatusUpdate = ['DRAFT', 'VALIDATED', 'REVIEWED'].includes(expense.status);
 
   return (
-    <ScrollView className="flex-1 bg-background p-4">
-      <View className="flex-row justify-between items-center mb-2">
-        <Text className="text-xl font-bold text-foreground">Expense Details</Text>
-        <View className="flex-row items-center space-x-4">
-          {showPayment && (
-            <View className="items-center">
-              <Tooltip>
-                <TooltipTrigger>
-                  <Button
-                    variant="ghost"
-                    onPress={() => setShowPayModal(true)}
-                    className="p-2"
-                  >
-                    <Ionicons name="cash-outline" size={22} color="#2563eb" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <Text>Pay</Text>
-                </TooltipContent>
-              </Tooltip>
-              <Text className="text-xs text-center text-muted-foreground mt-1">Pay</Text>
-            </View>
-          )}
-          {showStatusUpdate && (
-            <View className="items-center">
-              <Tooltip>
-                <TooltipTrigger>
-                  <Button
-                    variant="ghost"
-                    onPress={() => {
-                      if (nextStatuses.length === 1) {
-                        setSelectedStatus(nextStatuses[0]);
-                        setShowStatusModal(true);
-                      } else {
-                        setShowStatusModal(true);
-                      }
-                    }}
-                    className="p-2"
-                  >
-                    <Ionicons name="checkmark-done" size={22} color="#22c55e" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <Text>Update Status</Text>
-                </TooltipContent>
-              </Tooltip>
-              <Text className="text-xs text-center text-muted-foreground mt-1">Status</Text>
-            </View>
-          )}
-          {canReset && (
-            <View className="items-center">
-              <Tooltip>
-                <TooltipTrigger>
-                  <Button
-                    variant="ghost"
-                    onPress={() => setShowResetModal(true)}
-                    disabled={isResetting}
-                    className="p-2"
-                  >
-                    <Ionicons name="refresh" size={22} color="#888" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <Text>Reset to Draft</Text>
-                </TooltipContent>
-              </Tooltip>
-              <Text className="text-xs text-center text-muted-foreground mt-1">Reset</Text>
-            </View>
-          )}
-          {canDelete && (
-            <View className="items-center">
-              <Tooltip>
-                <TooltipTrigger>
-                  <Button
-                    variant="ghost"
-                    onPress={() => setShowDeleteModal(true)}
-                    disabled={isDeleting}
-                    className="p-2"
-                  >
-                    <Ionicons name="trash" size={22} color="#e11d48" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <Text>Delete</Text>
-                </TooltipContent>
-              </Tooltip>
-              <Text className="text-xs text-center text-muted-foreground mt-1">Delete</Text>
-            </View>
-          )}
-        </View>
-      </View>
+    Platform.OS === 'web' ? (
+      <View className=" bg-background p-6 h-screen overflow-y-auto">
+  <View className="min-h-full p-6 w-full grid grid-cols-1 gap-6 ">
+    {/* Left Column: Summary & Items */}
+    <View className="col-span-1 flex flex-col gap-4">
       <ExpenseHeader
         title={expense.title}
         amount={expense.txn_amount}
@@ -442,38 +358,71 @@ export default function ExpenseDetail() {
         status={expense.status}
         balance={expense.balance ?? 0}
       />
+      <div className="bg-card rounded-xl shadow-md p-4 space-y-2">
+        <SectionHeader title="Items" />
+        {expense.products && expense.products?.length > 0 ? (
+          <table className="w-full text-sm text-left">
+            <thead className="text-muted-foreground border-b">
+              <tr>
+                <th className="py-2 px-1">#</th>
+                <th className="py-2 px-1">Name</th>
+                <th className="py-2 px-1">Qty</th>
+                <th className="py-2 px-1">Price</th>
+                <th className="py-2 px-1">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expense.products.map((item, idx) => (
+                <tr key={idx} className="border-b hover:bg-muted/30">
+                  <td className="py-2 px-1">{idx + 1}</td>
+                  <td className="py-2 px-1">{item.name}</td>
+                  <td className="py-2 px-1">{item.qty}</td>
+                  <td className="py-2 px-1">{item.price}</td>
+                  <td className="py-2 px-1">{item.amount}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <Text className="text-muted-foreground">No items</Text>
+        )}
+      </div>
+    </View>
 
-      {/* Items Section */}
-      <SectionHeader title="Items" />
-      <FlatList
-        data={expense.products || []}
-        renderItem={({ item }) => <ExpenseItemRow item={item} />}
-        keyExtractor={(_, idx) => idx.toString()}
-        ListEmptyComponent={<Text className="text-muted-foreground">No items</Text>}
-        scrollEnabled={false}
-      />
+    {/* Middle Column: Payment History */}
+    <View className="col-span-1 flex flex-col gap-4">
+      <div className="bg-card rounded-xl shadow-md p-4 space-y-2 overflow-x-hidden">
+        <SectionHeader title="Payment History" />
+        {expense.payHistory && expense.payHistory?.length > 0 ? (
+          <table className="w-full text-sm text-left">
+            <thead className="text-muted-foreground border-b">
+              <tr>
+                <th className="py-2 px-1">#</th>
+                <th className="py-2 px-1">Date</th>
+                <th className="py-2 px-1">Amt</th>
+                <th className="py-2 px-1">Bank</th>
+                <th className="py-2 px-1">Payer</th>
+                <th className="py-2 px-1">Memo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expense.payHistory && expense.payHistory.map((item, idx) => (
+                <tr key={idx} className="border-b hover:bg-muted/30  ">
+                  <td className="py-2 px-1">{idx + 1}</td>
+                  <td className="py-2 px-1">{item.paymentDate}</td>
+                  <td className="py-2 px-1">₦{item.paidAmount.toLocaleString()}</td>
+                  <td className="py-2 px-1">{item.bankAcct}</td>
+                  <td className="py-2 px-1">{item.payer}</td>
+                  <td className="py-2 px-1 truncate">{item.memo}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <Text className="text-muted-foreground">No payments</Text>
+        )}
+      </div>
 
-      {/* Payment History Section */}
-      <SectionHeader title="Payment History" />
-      <FlatList
-        data={expense.payHistory || []}
-        renderItem={({ item }) => <PaymentHistoryRow item={item} />}
-        keyExtractor={(_, idx) => idx.toString()}
-        ListEmptyComponent={<Text className="text-muted-foreground">No payments</Text>}
-        scrollEnabled={false}
-      />
-
-      {/* Notes Section */}
-      <SectionHeader title="Notes" />
-      <FlatList
-        data={expense.notes || []}
-        renderItem={({ item }) => <NoteRow item={item} />}
-        keyExtractor={(_, idx) => idx.toString()}
-        ListEmptyComponent={<Text className="text-muted-foreground">No notes</Text>}
-        scrollEnabled={false}
-      />
-
-      {/* Remove the redundant pay button */}
       <ExpensePayment
         balance={expense.balance ?? 0}
         banks={banks}
@@ -482,61 +431,248 @@ export default function ExpenseDetail() {
         isVisible={showPayment && showPayModal}
         onClose={() => setShowPayModal(false)}
       />
-      <ExpenseNotes
-        notes={expense.notes || []}
-        onAddNote={addNote}
-        isUpdating={isUpdating}
-        userName={user?.name || 'User'}
-        onChanged={handleNoteChanged}
-      />
-      <Modal isVisible={showDeleteModal} onBackdropPress={() => setShowDeleteModal(false)}>
-        <View className="bg-background p-6 rounded-lg">
-          <Text className="text-lg font-bold mb-4 text-foreground">Delete Expense?</Text>
-          <Text className="mb-4 text-foreground">Are you sure you want to delete this expense? This action cannot be undone.</Text>
-          <View className="flex-row justify-end space-x-2">
-            <Button variant="outline" onPress={() => setShowDeleteModal(false)}>
-              <Text>Cancel</Text>
-            </Button>
-            <Button className="bg-destructive" onPress={handleDeleteExpense} disabled={isDeleting}>
-              <Text className="text-white">{isDeleting ? 'Deleting...' : 'Delete'}</Text>
-            </Button>
+    </View>
+
+    {/* Right Column: Notes */}
+    <View className="col-span-1 flex flex-col gap-4">
+      <div className="bg-card rounded-xl shadow-md p-4 space-y-2">
+        <SectionHeader title="Notes" />
+        {expense.notes?.length > 0 ? (
+          expense.notes.map((note, idx) => <NoteRow key={idx} item={note} />)
+        ) : (
+          <Text className="text-muted-foreground">No notes</Text>
+        )}
+        <ExpenseNotes
+          notes={expense.notes || []}
+          onAddNote={addNote}
+          isUpdating={isUpdating}
+          userName={user?.name || 'User'}
+          onChanged={handleNoteChanged}
+        />
+      </div>
+    </View>
+  </View>
+</View>
+
+    ) : (
+      <ScrollView className="flex-1 bg-background p-4">
+        {/* Stacked content for mobile */}
+        <View className="flex-row justify-between items-center mb-2">
+          <Text className="text-xl font-bold text-foreground">Expense Details</Text>
+          <View className="flex-row items-center space-x-4">
+            {showPayment && (
+              <View className="items-center">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Pressable
+                      onPress={() => setShowPayModal(true)}
+                      className="p-2"
+                    >
+                      <Ionicons name="cash-outline" size={22} color="#2563eb" />
+                    </Pressable>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <Text>Pay</Text>
+                  </TooltipContent>
+                </Tooltip>
+                <Text className="text-xs text-center text-muted-foreground mt-1">Pay</Text>
+              </View>
+            )}
+            {showStatusUpdate && (
+              <View className="items-center">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Pressable
+                      onPress={() => {
+                        if (nextStatuses.length === 1) {
+                          setSelectedStatus(nextStatuses[0]);
+                          setShowStatusModal(true);
+                        } else {
+                          setShowStatusModal(true);
+                        }
+                      }}
+                      className="p-2"
+                    >
+                      <Ionicons name="checkmark-done" size={22} color="#22c55e" />
+                    </Pressable>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <Text>Update Status</Text>
+                  </TooltipContent>
+                </Tooltip>
+                <Text className="text-xs text-center text-muted-foreground mt-1">Status</Text>
+              </View>
+            )}
+            {canReset && (
+              <View className="items-center">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Pressable
+                      onPress={() => setShowResetModal(true)}
+                      disabled={isResetting}
+                      className="p-2"
+                    >
+                      <Ionicons name="refresh" size={22} color="#888" />
+                    </Pressable>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <Text>Reset to Draft</Text>
+                  </TooltipContent>
+                </Tooltip>
+                <Text className="text-xs text-center text-muted-foreground mt-1">Reset</Text>
+              </View>
+            )}
+            {canDelete && (
+              <View className="items-center">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Pressable
+                      onPress={() => setShowDeleteModal(true)}
+                      disabled={isDeleting}
+                      className="p-2"
+                    >
+                      <Ionicons name="trash" size={22} color="#e11d48" />
+                    </Pressable>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <Text>Delete</Text>
+                  </TooltipContent>
+                </Tooltip>
+                <Text className="text-xs text-center text-muted-foreground mt-1">Delete</Text>
+              </View>
+            )}
           </View>
         </View>
-      </Modal>
-      {/* Reset Confirmation Modal */}
-      <Modal isVisible={showResetModal} onBackdropPress={() => setShowResetModal(false)}>
-        <View className="bg-background p-6 rounded-lg">
-          <Text className="text-lg font-bold mb-4 text-foreground">Reset Expense?</Text>
-          <Text className="mb-4 text-foreground">Are you sure you want to reset this expense to draft? This will clear all payment and notes history.</Text>
-          <View className="flex-row justify-end space-x-2">
-            <Button variant="outline" onPress={() => setShowResetModal(false)}>
-              <Text>Cancel</Text>
-            </Button>
-            <Button className="bg-primary" onPress={handleResetExpense} disabled={isResetting}>
-              <Text className="text-white">{isResetting ? 'Resetting...' : 'Reset'}</Text>
-            </Button>
-          </View>
-        </View>
-      </Modal>
-      {/* Status Update Modal */}
-      <Modal isVisible={showStatusModal} onBackdropPress={() => setShowStatusModal(false)}>
-        <View className="bg-background p-6 rounded-lg">
-          <Text className="text-lg font-bold mb-4 text-foreground">Update Status</Text>
-          <Text className="mb-4 text-foreground">Are you sure you want to update the status to {selectedStatus || nextStatuses[0]}?</Text>
-          <View className="flex-row justify-end space-x-2">
-            <Button variant="outline" onPress={() => setShowStatusModal(false)}>
-              <Text>Cancel</Text>
-            </Button>
-            <Button 
-              className="bg-primary" 
-              onPress={() => handleStatusUpdate(selectedStatus || nextStatuses[0])} 
-              disabled={isUpdating}
+        <ExpenseHeader
+          title={expense.title}
+          amount={expense.txn_amount}
+          vendor={expense.vendor?.name || ''}
+          date={expense.date}
+          status={expense.status}
+          balance={expense.balance ?? 0}
+        />
+        <SectionHeader title="Items" />
+        <FlatList
+          data={expense.products || []}
+          renderItem={({ item }) => <ExpenseItemRow item={item} />}
+          keyExtractor={(_, idx) => idx.toString()}
+          ListEmptyComponent={<Text className="text-muted-foreground">No items</Text>}
+          scrollEnabled={false}
+        />
+        <SectionHeader title="Payment History" />
+        <FlatList
+          data={expense.payHistory || []}
+          renderItem={({ item }) => <PaymentHistoryRow item={item} />}
+          keyExtractor={(_, idx) => idx.toString()}
+          ListEmptyComponent={<Text className="text-muted-foreground">No payments</Text>}
+          scrollEnabled={false}
+        />
+        <SectionHeader title="Notes" />
+        <FlatList
+          data={expense.notes || []}
+          renderItem={({ item }) => <NoteRow item={item} />}
+          keyExtractor={(_, idx) => idx.toString()}
+          ListEmptyComponent={<Text className="text-muted-foreground">No notes</Text>}
+          scrollEnabled={false}
+        />
+        <ExpensePayment
+          balance={expense.balance ?? 0}
+          banks={banks}
+          onMakePayment={handleMakePayment}
+          userName={user?.name || 'User'}
+          isVisible={showPayment && showPayModal}
+          onClose={() => setShowPayModal(false)}
+        />
+        <ExpenseNotes
+          notes={expense.notes || []}
+          onAddNote={addNote}
+          isUpdating={isUpdating}
+          userName={user?.name || 'User'}
+          onChanged={handleNoteChanged}
+        />
+        {showDeleteModal && (
+          <Modal
+            visible={showDeleteModal}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowDeleteModal(false)}
+          >
+            <Pressable
+              onPress={() => setShowDeleteModal(false)}
+              className="flex-1 bg-black/50 justify-center items-center"
             >
-              <Text className="text-white">{isUpdating ? 'Updating...' : 'Update'}</Text>
-            </Button>
-          </View>
-        </View>
-      </Modal>
-    </ScrollView>
+              <View className="bg-background rounded-lg p-6 w-[90%] max-w-sm shadow-lg">
+                <Text className="text-lg font-bold mb-4 text-foreground">Delete Expense?</Text>
+                <Text className="mb-4 text-foreground">Are you sure you want to delete this expense? This action cannot be undone.</Text>
+                <View className="flex-row justify-end space-x-2">
+                  <Button variant="outline" onPress={() => setShowDeleteModal(false)}>
+                    <Text>Cancel</Text>
+                  </Button>
+                  <Button className="bg-destructive" onPress={handleDeleteExpense} disabled={isDeleting}>
+                    <Text className="text-white">{isDeleting ? 'Deleting...' : 'Delete'}</Text>
+                  </Button>
+                </View>
+              </View>
+            </Pressable>
+          </Modal>
+        )}
+        {showResetModal && (
+          <Modal
+            visible={showResetModal}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowResetModal(false)}
+          >
+            <Pressable
+              onPress={() => setShowResetModal(false)}
+              className="flex-1 bg-black/50 justify-center items-center"
+            >
+              <View className="bg-background rounded-lg p-6 w-[90%] max-w-sm shadow-lg">
+                <Text className="text-lg font-bold mb-4 text-foreground">Reset Expense?</Text>
+                <Text className="mb-4 text-foreground">Are you sure you want to reset this expense to draft? This will clear all payment and notes history.</Text>
+                <View className="flex-row justify-end space-x-2">
+                  <Button variant="outline" onPress={() => setShowResetModal(false)}>
+                    <Text>Cancel</Text>
+                  </Button>
+                  <Button className="bg-primary" onPress={handleResetExpense} disabled={isResetting}>
+                    <Text className="text-white">{isResetting ? 'Resetting...' : 'Reset'}</Text>
+                  </Button>
+                </View>
+              </View>
+            </Pressable>
+          </Modal>
+        )}
+        {showStatusModal && (
+          <Modal
+            visible={showStatusModal}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowStatusModal(false)}
+          >
+            <Pressable
+              onPress={() => setShowStatusModal(false)}
+              className="flex-1 bg-black/50 justify-center items-center"
+            >
+              <View className="bg-background rounded-lg p-6 w-[90%] max-w-sm shadow-lg">
+                <Text className="text-lg font-bold mb-4 text-foreground">Update Status</Text>
+                <Text className="mb-4 text-foreground">Are you sure you want to update the status to {selectedStatus || nextStatuses[0]}?</Text>
+                <View className="flex-row justify-end space-x-2">
+                  <Button variant="outline" onPress={() => setShowStatusModal(false)}>
+                    <Text>Cancel</Text>
+                  </Button>
+                  <Button 
+                    className="bg-primary" 
+                    onPress={() => handleStatusUpdate(selectedStatus || nextStatuses[0])} 
+                    disabled={isUpdating}
+                  >
+                    <Text className="text-white">{isUpdating ? 'Updating...' : 'Update'}</Text>
+                  </Button>
+                </View>
+              </View>
+            </Pressable>
+          </Modal>
+        )}
+      </ScrollView>
+    )
   );
 }
